@@ -8,7 +8,6 @@ AddOptionMenu "OptionsMenuSimple"
 	Submenu "Snowy MP", "SnowyMultiplayerOptions"
 }
 
-
 OptionValue RespawnDelayValues
 {
 	-1, "No respawns (Permadeath)"
@@ -19,29 +18,130 @@ OptionValue RespawnDelayValues
 	20, "20 seconds"
 	30, "30 seconds"
 	60, "60 seconds"
+	300, "5 minutes"
 }
+
+OptionValue BleedOutTimerValues
+{
+	-1, "Never Bleed Out"
+	5, "5 seconds"
+	10, "10 seconds"
+	15, "15 seconds"
+	30, "30 seconds"
+	60, "60 seconds"
+	120, "120 seconds"
+	300, "5 minutes"
+}
+
+OptionValue SafeSpotWarpValues
+{
+	0, "Always"
+	1, "Optional"
+	2, "Never"
+}
+
+OptionValue ReviveCountValues
+{
+	-1, "Infinite Revives"
+	1, "1 Revive"
+	2, "2 Revives"
+	3, "3 Revives"
+	4, "4 Revives"
+	5, "5 Revives"
+	10, "10 Revives"
+}
+
+OptionValue RespawnCountValues
+{
+	-1, "Infinite Respawns"
+	1, "1 Respawn"
+	2, "2 Respawns"
+	3, "3 Respawns"
+	4, "4 Respawns"
+	5, "5 Respawns"
+	10, "10 Respawns"
+}
+
 
 OptionMenu "SnowyMultiplayerOptions"
 {
-	Title "Snowy Multiplayer"
+	Title "Snowy MP - Options"
+	Position -35
 
-	StaticText "HUD Options"
-    Option "Group Info HUD", "snowy_mp__display_group_info_ui", YesNo
-    Option "Display Player Names", "snowy_mp__display_player_names", YesNo
+	Submenu "GZDoom Gameplay Options", "GameplayOptions"
 	StaticText ""
 
-	StaticText "Gameplay Settings"
-    Option "Respawn Delay", "snowy_mp__delay_before_respawn", RespawnDelayValues
-    Option "Allow Player Revives", "snowy_mp__allow_reviving", YesNo
-    Option "Allow Spectating After Death", "snowy_mp__allow_death_spectating", YesNo
-    Option "Allow Returning To Spawn", "snowy_mp__allow_return_to_spawn_after_damaging_floor_death", YesNo
+	StaticText "HUD Options", 1
+	Option "Group Info HUD", "snowy_mp__display_group_info_ui", YesNo
+	Option "Display Player Names", "snowy_mp__display_player_names", YesNo
 	StaticText ""
+
+	StaticText "Gameplay Settings", 1
+	Option "Allow Spectating After Death", "snowy_mp__allow_death_spectating", YesNo
+	Option "Warp To Safe Spot After Death", "snowy_mp__irrecoverable_bodies", SafeSpotWarpValues
+	StaticText ""
+
+	StaticText "Respawn Settings", 1
+	Option "Respawn Delay", "snowy_mp__delay_before_respawn", RespawnDelayValues
+	Option "Max Number Of Respawns Per Player", "snowy_mp__max_respawn_count", RespawnCountValues, "snowy_mp__delay_before_respawn", 0, -1
+	Option "Allow Respawns When All Players Are Dead", "snowy_mp__allow_respawns_after_game_over", YesNo, "snowy_mp__delay_before_respawn", 0, -1
+	Option "Respawn At Corpse", "snowy_mp__respawn_where_death_occured", YesNo, "snowy_mp__delay_before_respawn", 0, -1
+	StaticText ""
+	
+	StaticText "Revive Settings", 1
+	Option "Allow Player Revives", "snowy_mp__allow_reviving", YesNo
+	Option "Max Number Of Times To Be Revived", "snowy_mp__max_revive_count", ReviveCountValues, "snowy_mp__allow_reviving"
+	Option "Time To Bleed Out", "snowy_mp__bleed_out_timer", BleedOutTimerValues, "snowy_mp__allow_reviving"
+	Option "Allow Movement While Reviving", "snowy_mp__move_while_reviving", YesNo, "snowy_mp__allow_reviving"
+	Option "Keep Holding Weapon While Reviving", "snowy_mp__keep_weapon_while_reviving", YesNo, "snowy_mp__allow_reviving"
+	StaticText ""
+	
+	StaticText "Item Drops On Death", 1
 	Option "Allow Dropping Items On Death", "snowy_mp__drop_items_on_death", YesNo
-	Option "Drop Weapons On Death", "snowy_mp__death_drop_all", YesNo
-	Option "Drop Ammo On Death", "snowy_mp__death_drop_ammo", YesNo
-	Option "Drop Key Items On Death", "snowy_mp__death_drop_keys", YesNo
+	Option "Drop Items On Death After Game over", "snowy_mp__drop_items_during_game_over", YesNo, "snowy_mp__drop_items_on_death"
+	Option "Drop Weapons On Death", "snowy_mp__death_drop_all", YesNo, "snowy_mp__drop_items_on_death"
+	Option "Drop Ammo On Death", "snowy_mp__death_drop_ammo", YesNo, "snowy_mp__drop_items_on_death"
+	Option "Drop Key Items On Death", "snowy_mp__death_drop_keys", YesNo, "snowy_mp__drop_items_on_death"
 	StaticText ""
 
-	StaticText "Silly Stuff"
+	StaticText "Silly Stuff", 1
 	Option "COD Zombies Game Over Songs", "snowy_mp__cod_zombies_game_overs", YesNo
+	StaticText ""
+
+	Submenu "Advanced Options", "SnowyMultiplayerOptionsAdvanced"
+}
+
+OptionMenu "SnowyMultiplayerOptionsAdvanced"
+{
+	Title "Snowy MP - Advanced Options"
+	Position -35
+
+	StaticText "These options may severely affect the", "Red"
+	StaticText "balance and feel of the co-op mechanics!", "Red"
+	StaticText ""
+
+	StaticText "Respawn Settings", 1
+	ScaleSlider "Respawn Delay (in seconds)", "snowy_mp__delay_before_respawn",  -1, 600, 1, "Instant", "No Respawns (Permadeath)"
+	ScaleSlider "Max Number Of Respawns Per Player", "snowy_mp__max_respawn_count",  -1, 100, 1, "No Respawns", "Infinite Respawns", "snowy_mp__delay_before_respawn", -1
+	ScaleSlider "Health Given When Respawned", "snowy_mp__respawned_health",  5, 100, 5, "", "", "snowy_mp__delay_before_respawn", -1
+	StaticText ""
+	
+	StaticText "Revive Settings", 1
+	Option "Allow Player Revives", "snowy_mp__allow_reviving", YesNo
+	ScaleSlider "Time To Revive (in seconds)", "snowy_mp__revive_delay",  0, 60, 1, "Instant Revive", "", "snowy_mp__allow_reviving"
+	ScaleSlider "Time To Bleed Out (in seconds)", "snowy_mp__bleed_out_timer", -1, 3600, 1, "Instant Bleed Out", "Never Bleed Out", "snowy_mp__allow_reviving"
+	ScaleSlider "Health Given When Revived", "snowy_mp__revived_health",  5, 100, 5, "", "", "snowy_mp__allow_reviving"
+	ScaleSlider "Max Revive Distance", "snowy_mp__reviving_distance",  16, 320, 8, "", "", "snowy_mp__allow_reviving"
+	ScaleSlider "Max Number Of Times To Be Revived", "snowy_mp__max_revive_count",  -1, 100, 1, "No Revives", "Infinite Revives", "snowy_mp__allow_reviving"
+	StaticText ""
+
+	StaticText "Message Settings", 1
+	Option "Enable Messaages From Snowy MP", "snowy_mp__allow_messages", YesNo
+	Option "Spectating Messages", "snowy_mp__spectating_messages", YesNo, "snowy_mp__allow_messages"
+	Option "Warping Messages", "snowy_mp__warp_messages", YesNo, "snowy_mp__allow_messages"
+	Option "Respawn Messages", "snowy_mp__respawn_messages", YesNo, "snowy_mp__allow_messages"
+	Option "Revival Messages", "snowy_mp__revive_messages", YesNo, "snowy_mp__allow_messages"
+	Option "Downed Messages", "snowy_mp__downed_messages", YesNo, "snowy_mp__allow_messages"
+	Option "Bleed Out Messages", "snowy_mp__bleed_out_messages", YesNo, "snowy_mp__allow_messages"
+	StaticText ""
 }

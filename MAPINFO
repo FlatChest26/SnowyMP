@@ -4,4 +4,5 @@ GameInfo
 
     AddEventHandlers = "SnowyMPGroupUIHandler"
     AddEventHandlers = "SnowyMPGameplayChanges"
+    AddEventHandlers = "SnowyMPNameTagHandler"
 }

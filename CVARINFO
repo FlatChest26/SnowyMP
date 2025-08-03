@@ -2,14 +2,41 @@
 
 // Server
 server int snowy_mp__delay_before_respawn = -1;
-server bool snowy_mp__allow_reviving = true;
+server int snowy_mp__respawned_health = 100;
+
+server int snowy_mp__irrecoverable_bodies = 1;
 server bool snowy_mp__allow_death_spectating = true;
-server bool snowy_mp__allow_return_to_spawn_after_damaging_floor_death = true;
+
+server bool snowy_mp__allow_reviving = true;
+server int snowy_mp__bleed_out_timer = -1;
+server int snowy_mp__revive_delay = 4;
+server int snowy_mp__revived_health = 25;
+server int snowy_mp__reviving_distance = 48;
 
 server bool snowy_mp__drop_items_on_death = true;
+server bool snowy_mp__drop_items_during_game_over = true;
 server bool snowy_mp__death_drop_weapons = false;
 server bool snowy_mp__death_drop_ammo = true;
 server bool snowy_mp__death_drop_keys = false;
+
+server bool snowy_mp__keep_weapon_while_reviving = false;
+server bool snowy_mp__move_while_reviving = false;
+
+server int snowy_mp__max_revive_count = -1;
+server int snowy_mp__max_respawn_count = -1;
+
+server bool snowy_mp__allow_respawns_after_game_over = false;
+server bool snowy_mp__respawn_where_death_occured = true;
+
+
+
+server bool snowy_mp__allow_messages = true;
+server bool snowy_mp__revive_messages = true;
+server bool snowy_mp__respawn_messages = true;
+server bool snowy_mp__spectating_messages = true;
+server bool snowy_mp__warp_messages = true;
+server bool snowy_mp__downed_messages = true;
+server bool snowy_mp__bleed_out_messages = true;
 
 
 // User

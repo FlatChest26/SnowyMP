@@ -10,7 +10,7 @@ class SnowyMPNameTagHandler : EventHandler
 
 	override void RenderOverlay(RenderEvent e)
 	{
-		if (false) DrawNameTags(e);
+		// DrawNameTags(e);
 	}
 
 	ui void DrawNameTags(RenderEvent e)
@@ -40,8 +40,6 @@ class SnowyMPNameTagHandler : EventHandler
 			
 			other = PlayerPawn(player_iterator.Next());
 		}
-
-		
 	}
 
 	ui void DrawNameTag(Actor entity, PlayerPawn player, HUDFont hud_font, String NameTagName, Name NameTagColor,  double MaxNameTagDistance = 320)
@@ -52,8 +50,8 @@ class SnowyMPNameTagHandler : EventHandler
 		// Check if the name tag would even be on screen
 		double angle_between = player.DeltaAngle(player.Angle, player.AngleTo(entity));
 		double pitch_between = player.DeltaAngle(player.Pitch, player.PitchTo(entity));
-		double angle_max = player_info.FOV / 2;
-		double pitch_max = player_info.FOV / 2;
+		double angle_max = player_info.FOV / 6;
+		double pitch_max = player_info.FOV / 6;
 
 		if (abs(angle_between) > angle_max || abs(pitch_between) > pitch_max) return;
 

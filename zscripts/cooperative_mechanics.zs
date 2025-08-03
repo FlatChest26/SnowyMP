@@ -1,9 +1,9 @@
 struct SnowyMP_Constants
 {
-	int LevelRestartTime; 		// How long it takes for the level to restart after all players are ready
-	int ReviveTime;				// How long to revive a teammate
-	int RevivedHealth;			// The health that a revived player will begin at
-	double RevivingDistance;	// Max distance to start reviving
+	int LevelRestartTime; 						// How long it takes for the level to restart after all players are ready
+	
+	int ValidSafeSpotTics;						// Tics required for a spot to be considered "safe"
+	int SpectateModeKeybindDisplayMaxTics;		// Tics the "Press P to change Spectating Mode" message will appear
 }
 
 struct SnowyMP_PlayerInfo
@@ -29,9 +29,25 @@ struct SnowyMP_PlayerInfo
 	Actor SpectatingCamera; // The actor which acts as the spectating camera
 	vector3 SpectatingOffset;
 
-	transient bool ReadyToRestart; // Whether this player is ready to restart the level
-	vector3 SpawnPoint;
-	vector3 SafeSpot;
+	transient bool ReadyToRestart; 		// Whether this player is ready to restart the level
+
+	int SafeTics;			// How many tics the player has been "safe" for
+	vector3 SpawnPoint;		// The player's spawn point
+	double SpawnAngle;		// Angle player was facing at their spawn
+
+	vector3 SafeSpot;		// Last safe spot where a player can be warped
+	double SafeAngle;		// Angle player was facing at the last safe spot
+
+	transient int SpectateModeKeybindDisplayTics;	// How long the "Press P to change Spectating Mode" message has been displayed.
+
+	int BleedOutTics;		// Time this player has spent bleeding out
+
+	int ReviveCount;		// Number of times this player has been revived.
+	int RespawnCount;		// Number of times this player has respawned.
+	int SafeWarpCount;		// Number of times this player has warpped to a safe spot.
+
+	int DownCount;			// Number of times this player has gone down.
+	int BleedOutCount;		// Number of times this player has bled out.
 }
 
 class SnowyMPGameplayChanges : EventHandler
@@ -45,8 +61,6 @@ class SnowyMPGameplayChanges : EventHandler
 	bool InGameOver; // Whether the game has ended because all players have died
 	string GameOverMusic;
 
-	int GameOverCount;
-
 	/* Level Restart */
 	transient bool LevelRestarting; // Whether to restart the level
 	transient int RestartingTics; // Time until restart
@@ -55,13 +69,66 @@ class SnowyMPGameplayChanges : EventHandler
 
 	// Methods //
 
+	void RandomizeGameOverMusic()
+	{
+		switch(Random(0, 7))
+		{
+		break; case 0: GameOverMusic = "Ascension - Game Over";
+		break; case 1: GameOverMusic = "Der Riese - Game Over";
+		break; case 2: GameOverMusic = "Verruckt - Game Over";
+		break; case 3: GameOverMusic = "Shi No Numa - Game Over";
+		break; case 4: GameOverMusic = "Nacht Der Untoten - Game Over"; 
+		break; case 5: GameOverMusic = "Kino Der Toten - Game Over";
+		break; case 6: GameOverMusic = "Shangri La - Game Over";
+		break; case 7: GameOverMusic = "Die Rise - Game Over"; 
+		}
+	}
+
 	/* Getters */
-	clearscope bool IsRespawningAllowed() const  { return CVar.GetCVar('snowy_mp__delay_before_respawn', players[consoleplayer]).GetInt() != -1; }
-	clearscope int GetRespawnDelay() const { return CVar.GetCVar('snowy_mp__delay_before_respawn', players[consoleplayer]).GetInt(); }
-	
 	clearscope SnowyMPHandler GetSnowyMPHandler() const { return SnowyMPHandler(StaticEventHandler.Find('SnowyMPHandler')); }
 
-	clearscope int ActivePlayerCount() const
+	clearscope bool IsRespawningAllowed() const  { return CVar.GetCVar('snowy_mp__delay_before_respawn', players[consoleplayer]).GetInt() != -1 && !MaxRespawnCount() == 0; }
+	clearscope int GetRespawnDelay() const { return CVar.GetCVar('snowy_mp__delay_before_respawn', players[consoleplayer]).GetInt(); }
+
+	clearscope bool IsRevivingAllowed() const { return CVar.GetCVar('snowy_mp__allow_reviving', players[consoleplayer]).GetBool() && !MaxReviveCount() == 0; }
+
+	clearscope bool IsSpectatingAllowed() const { return CVar.GetCVar('snowy_mp__allow_death_spectating', players[consoleplayer]).GetBool(); }
+
+	clearscope bool NeverIrrecoverableBodies() const { return CVar.GetCVar('snowy_mp__irrecoverable_bodies', players[consoleplayer]).GetInt() == 0; }
+	clearscope bool OptionallyIrrecoverableBodies() const { return CVar.GetCVar('snowy_mp__irrecoverable_bodies', players[consoleplayer]).GetInt() == 1; }
+	clearscope bool AlwaysIrrecoverableBodies() const { return CVar.GetCVar('snowy_mp__irrecoverable_bodies', players[consoleplayer]).GetInt() == 2; }
+	
+	clearscope bool IsBleedOutAllowed() const { return CVar.GetCVar('snowy_mp__bleed_out_timer', players[consoleplayer]).GetInt() != -1; }
+	clearscope int GetBleedOutTime() const { return CVar.GetCVar('snowy_mp__bleed_out_timer', players[consoleplayer]).GetInt() * TICRATE; }
+
+	clearscope bool KeepWeaponWhileReviving() const { return CVar.GetCVar('snowy_mp__keep_weapon_while_reviving', players[consoleplayer]).GetBool(); }
+	clearscope bool CanMoveWhileReviving() const { return CVar.GetCVar('snowy_mp__move_while_reviving', players[consoleplayer]).GetBool(); }
+
+	clearscope bool InfiniteRevives() const { return CVar.GetCVar('snowy_mp__max_revive_count', players[consoleplayer]).GetInt() == -1; }
+	clearscope int MaxReviveCount() const { return CVar.GetCVar('snowy_mp__max_revive_count', players[consoleplayer]).GetInt(); }
+
+	clearscope bool AllowRespawnBeforeGameOver() const { return CVar.GetCVar('snowy_mp__allow_respawns_after_game_over', players[consoleplayer]).GetInt(); }
+
+	clearscope bool InfiniteRespawns() const { return CVar.GetCVar('snowy_mp__max_respawn_count', players[consoleplayer]).GetInt() == -1; }
+	clearscope int MaxRespawnCount() const { return CVar.GetCVar('snowy_mp__max_respawn_count', players[consoleplayer]).GetInt(); }
+
+	clearscope bool RespawnInPlace() const { return CVar.GetCVar('snowy_mp__respawn_where_death_occured', players[consoleplayer]).GetBool(); }
+
+	clearscope int RespawnedHealth() const { return CVar.GetCVar('snowy_mp__respawned_health', players[consoleplayer]).GetInt(); }
+
+	clearscope int RevivedHealth() const { return CVar.GetCVar('snowy_mp__revived_health', players[consoleplayer]).GetInt(); }
+	clearscope int ReviveTime() const { return CVar.GetCVar('snowy_mp__revive_delay', players[consoleplayer]).GetInt(); }
+	clearscope int RevivingDistance() const { return CVar.GetCVar('snowy_mp__reviving_distance', players[consoleplayer]).GetInt(); }
+
+	clearscope bool AllowMessages() const { return CVar.GetCVar('snowy_mp__allow_messages', players[consoleplayer]).GetBool(); }
+	clearscope bool AllowSpectatingMessages() const { return AllowMessages() && CVar.GetCVar('snowy_mp__spectating_messages', players[consoleplayer]).GetBool(); }
+	clearscope bool AllowWarpingMessages() const { return AllowMessages() && CVar.GetCVar('snowy_mp__warp_messages', players[consoleplayer]).GetBool(); }
+	clearscope bool AllowRespawningMessages() const { return AllowMessages() && CVar.GetCVar('snowy_mp__respawn_messages', players[consoleplayer]).GetBool(); }
+	clearscope bool AllowRevivingMessages() const { return AllowMessages() && CVar.GetCVar('snowy_mp__revive_messages', players[consoleplayer]).GetBool(); }
+	clearscope bool AllowDownedMessages() const { return AllowMessages() && CVar.GetCVar('snowy_mp__downed_messages', players[consoleplayer]).GetBool(); }
+	clearscope bool AllowBleedOutMessages() const { return AllowMessages() && CVar.GetCVar('snowy_mp__bleed_out_messages', players[consoleplayer]).GetBool(); }
+
+	clearscope int ActivePlayerCount() const 
 	{
 		int count = 0;
 		for (int i = 0; i < MAXPLAYERS; i++) if (MP_Players[i].IsActive) count++;
@@ -82,6 +149,26 @@ class SnowyMPGameplayChanges : EventHandler
 		return count;
 	}
 
+	clearscope bool CanRespawnHappenAfterGameOver() const
+	{
+		if (!IsRespawningAllowed() || !AllowRespawnBeforeGameOver())
+			return false;
+		
+		for(int PlayerNumber = 0; PlayerNumber < MAXPLAYERS; PlayerNumber++) 
+			if (IsPlayerActive(PlayerNumber) && (IsPlayerAlive(PlayerNumber) || PlayerHasRespawnsLeft(PlayerNumber)))
+				return true;
+			
+		return false;
+	}
+
+	clearscope bool DropItemsOnDeath() const { return CVar.GetCVar('snowy_mp__drop_items_on_death', players[consoleplayer]).GetBool(); }
+	clearscope bool DropItemsOnDeathAfterGameOver() const { return CVar.GetCVar('snowy_mp__drop_items_during_game_over', players[consoleplayer]).GetBool(); }
+	clearscope bool DropWeaponsOnDeath() const { return DropItemsOnDeath() && CVar.GetCVar('snowy_mp__death_drop_weapons', players[consoleplayer]).GetBool(); }
+	clearscope bool DropAmmoOnDeath() const { return DropItemsOnDeath() && CVar.GetCVar('snowy_mp__death_drop_ammo', players[consoleplayer]).GetBool(); }
+	clearscope bool DropKeyItemsOnDeath() const { return DropItemsOnDeath() && CVar.GetCVar('snowy_mp__death_drop_keys', players[consoleplayer]).GetBool(); }
+
+	/* Player Getters */
+
 	clearscope bool IsPlayerActive(int PlayerNumber) const { return MP_Players[PlayerNumber].IsActive; }
 	clearscope bool IsPlayerAlive(int PlayerNumber) const { return MP_Players[PlayerNumber].IsAlive; }
 	clearscope bool IsPlayerOnGameOver(int PlayerNumber) const { return MP_Players[PlayerNumber].OnGameOverScreen; }
@@ -100,11 +187,14 @@ class SnowyMPGameplayChanges : EventHandler
 
 	clearscope int GetPlayerRevivingTarget(int PlayerNumber) const { return MP_Players[PlayerNumber].RevivingTarget; }
 	clearscope int GetPlayerRevivingTimer(int PlayerNumber) const { return MP_Players[PlayerNumber].RevivingTimer; }
-
+	
 	clearscope bool IsPlayerAllowedToRespawn(int PlayerNumber) const { return MP_Players[PlayerNumber].RespawnDelayTimer == 0; }
 	clearscope bool IsPlayerRespawning(int PlayerNumber) const { return MP_Players[PlayerNumber].RespawnDelayTimer != -1; }
 	clearscope int GetPlayerRespawnTimer(int PlayerNumber) const { return MP_Players[PlayerNumber].RespawnDelayTimer; }
 	
+	clearscope bool PlayerHasRespawnsLeft(int PlayerNumber) const { return InfiniteRespawns() || GetPlayerRespawnCount(PlayerNumber) < MaxRespawnCount(); }
+	clearscope bool PlayerHasRevivesLeft(int PlayerNumber) const { return InfiniteRevives() || GetPlayerReviveCount(PlayerNumber) < MaxReviveCount(); }
+
 	clearscope bool IsPlayerReadyToRestart(int PlayerNumber) const { return MP_Players[PlayerNumber].ReadyToRestart; }
 	
 	clearscope bool IsPlayerSpectating(int PlayerNumber) const { return MP_Players[PlayerNumber].SpectatingTarget != PlayerNumber; }
@@ -112,6 +202,15 @@ class SnowyMPGameplayChanges : EventHandler
 	clearscope bool IsPlayerSpectatingThirdPerson(int PlayerNumber) const { return MP_Players[PlayerNumber].SpectatingMode == SnowyMP_PlayerInfo.SM_ThirdPerson; }
 	clearscope int GetPlayerSpectatingTarget(int PlayerNumber) const { return MP_Players[PlayerNumber].SpectatingTarget; }
 	
+	clearscope bool HasPlayerBledOut(int PlayerNumber) const { return MP_Players[PlayerNumber].BleedOutTics >= GetBleedOutTime(); }
+	clearscope bool HasPlayerJustBledOut(int PlayerNumber) const { return MP_Players[PlayerNumber].BleedOutTics == GetBleedOutTime(); }
+
+	clearscope int GetPlayerReviveCount(int PlayerNumber) const { return MP_Players[PlayerNumber].ReviveCount; }
+	clearscope int GetPlayerRespawnCount(int PlayerNumber) const { return MP_Players[PlayerNumber].RespawnCount; }
+	clearscope int GetPlayerDownCount(int PlayerNumber) const { return MP_Players[PlayerNumber].DownCount; }
+	clearscope int GetPlayerBleedOutCount(int PlayerNumber) const { return MP_Players[PlayerNumber].BleedOutCount; }
+	
+
 	/* Setters & Player Behavior */
 
 	void ReadyToRestart(int PlayerNumber) { MP_Players[PlayerNumber].ReadyToRestart = true; }
@@ -218,6 +317,20 @@ class SnowyMPGameplayChanges : EventHandler
 		return false;
 	}
 
+	clearscope bool IsPlayerInCrusher(int PlayerNumber)
+	{
+		PlayerInfo player = players[PlayerNumber];
+		if (!player || !player.mo) return false;
+		
+		if (player.mo.CurSector.ceilingdata)
+			return true;
+
+		if (player.mo.CurSector.floordata)
+			return true;
+
+		return false;
+	}
+
 	clearscope bool IsPlayerFalling(int PlayerNumber)
 	{
 		PlayerInfo player = players[PlayerNumber];
@@ -230,6 +343,11 @@ class SnowyMPGameplayChanges : EventHandler
 			return true;
 
 		return false;
+	}
+
+	clearscope bool IsPlayerInSafeSpot(int PlayerNumber)
+	{
+		return !IsPlayerOnDamagingFloor(PlayerNumber) && !IsPlayerInCrusher(PlayerNumber);
 	}
 
 	/* Initialization */
@@ -255,26 +373,10 @@ class SnowyMPGameplayChanges : EventHandler
 			MP_Players[PlayerNumber].SpectatingOffset.Y = 12;
 			MP_Players[PlayerNumber].SpectatingOffset.Z = 0;
 		}
-
+		
 		MP_Constants.LevelRestartTime = 2 * TICRATE;
-		MP_Constants.ReviveTime = 4 * TICRATE;
-		MP_Constants.RevivedHealth = 25;
-		MP_Constants.RevivingDistance = 48;
-	}
-
-	void RandomizeGameOverMusic()
-	{
-		switch(Random(0, 7))
-		{
-		break; case 0: GameOverMusic = "Ascension - Game Over";
-		break; case 1: GameOverMusic = "Der Riese - Game Over";
-		break; case 2: GameOverMusic = "Verruckt - Game Over";
-		break; case 3: GameOverMusic = "Shi No Numa - Game Over";
-		break; case 4: GameOverMusic = "Nacht Der Untoten - Game Over"; 
-		break; case 5: GameOverMusic = "Kino Der Toten - Game Over";
-		break; case 6: GameOverMusic = "Shangri La - Game Over";
-		break; case 7: GameOverMusic = "Die Rise - Game Over"; 
-		}
+		MP_Constants.ValidSafeSpotTics = 2 * TICRATE;
+		MP_Constants.SpectateModeKeybindDisplayMaxTics = 4 * TICRATE;
 	}
 
 	override void PlayerEntered(PlayerEvent e)
@@ -284,7 +386,16 @@ class SnowyMPGameplayChanges : EventHandler
 		MP_Players[e.PlayerNumber].RevivingTarget = -1;
 		MP_Players[e.PlayerNumber].RevivingTimer  = 0;
 		MP_Players[e.PlayerNumber].RespawnDelayTimer = -1;
+
 		MP_Players[e.PlayerNumber].SpawnPoint = players[e.PlayerNumber].mo.Pos;
+		MP_Players[e.PlayerNumber].SpawnAngle = players[e.PlayerNumber].mo.Angle;
+		MP_Players[e.PlayerNumber].SafeSpot = players[e.PlayerNumber].mo.Pos;
+		MP_Players[e.PlayerNumber].SafeAngle = players[e.PlayerNumber].mo.Angle;
+
+		MP_Players[e.PlayerNumber].ReviveCount = 0; 
+		MP_Players[e.PlayerNumber].RespawnCount = 0; 
+		MP_Players[e.PlayerNumber].DownCount = 0; 
+		MP_Players[e.PlayerNumber].BleedOutCount = 0; 
 		CheckGameOver();
 	}
 
@@ -295,6 +406,10 @@ class SnowyMPGameplayChanges : EventHandler
 		MP_Players[e.PlayerNumber].RevivingTarget = -1;
 		MP_Players[e.PlayerNumber].RevivingTimer = 0;
 		MP_Players[e.PlayerNumber].RespawnDelayTimer = -1;
+		MP_Players[e.PlayerNumber].ReviveCount = 0; 
+		MP_Players[e.PlayerNumber].RespawnCount = 0; 
+		MP_Players[e.PlayerNumber].DownCount = 0; 
+		MP_Players[e.PlayerNumber].BleedOutCount = 0; 
 		CheckGameOver();
 	}
 
@@ -302,6 +417,7 @@ class SnowyMPGameplayChanges : EventHandler
 	{
 		MP_Players[e.PlayerNumber].IsAlive = true; 
 		MP_Players[e.PlayerNumber].SpawnPoint = players[e.PlayerNumber].mo.Pos;
+		MP_Players[e.PlayerNumber].SpawnAngle = players[e.PlayerNumber].mo.Angle;
 		CheckGameOver();
 	}
 
@@ -311,43 +427,20 @@ class SnowyMPGameplayChanges : EventHandler
 		MP_Players[e.PlayerNumber].RevivingTarget = -1;
 		MP_Players[e.PlayerNumber].RevivingTimer = 0;
 		MP_Players[e.PlayerNumber].RespawnDelayTimer = -1;
+		MP_Players[e.PlayerNumber].DownCount++;
 
 		CheckGameOver();
 
-		if (!InGameOver)
+		if (e.PlayerNumber != consoleplayer && IsRevivingAllowed())
 		{
-			if (e.PlayerNumber != consoleplayer && CVar.GetCVar('snowy_mp__allow_reviving', players[consoleplayer]).GetBool())
-			{
+			if (AllowDownedMessages()) 
 				Console.PrintfEx(PRINT_HIGH, "\cg%s is down.\c-", players[e.PlayerNumber].GetUserName());
-			}
 		}
 
-		if (CVar.GetCVar('snowy_mp__drop_items_on_death', players[e.PlayerNumber]).GetBool())
-		{
-			PlayerInfo player = players[e.PlayerNumber];
-			if (!player || !player.mo) return;
-			PlayerPawn player_pawn = player.mo;
-	
-			bool drop_weapons = CVar.GetCVar('snowy_mp__death_drop_weapons', players[e.PlayerNumber]).GetBool();
-			bool drop_ammo = CVar.GetCVar('snowy_mp__death_drop_ammo', players[e.PlayerNumber]).GetBool();
-			bool drop_keys = CVar.GetCVar('snowy_mp__death_drop_keys', players[e.PlayerNumber]).GetBool();
-
-			if (drop_weapons)
-			{
-				let item = player_pawn.FindInventory('Weapon', true);
-				if (item) player_pawn.DropInventory(item);
-			}
-			if (drop_ammo)
-			{
-				let item = player_pawn.FindInventory('Ammo', true);
-				if (item) player_pawn.DropInventory(item);
-			}
-			if (drop_keys)
-			{
-				let item = player_pawn.FindInventory('Key', true);
-				if (item) player_pawn.DropInventory(item);
-			}
-		}
+		if (InGameOver && !DropItemsOnDeathAfterGameOver()) 
+			return;
+		
+		DropPlayerItemsOnDeath(e.PlayerNumber);
 	}
 
 	/* Tick */
@@ -361,6 +454,7 @@ class SnowyMPGameplayChanges : EventHandler
 		CheckSpectating();
 		CheckRespawnDelays();
 		CheckSafeSpots();
+		CheckBleedOut();
 	}
 	
 	void CheckPlayerDeaths()
@@ -391,10 +485,17 @@ class SnowyMPGameplayChanges : EventHandler
 
 			if (IsPlayerWeaponLowered(PlayerNumber))
 			{
-				if (player.PendingWeapon != WP_NOCHANGE || !(player.PendingWeapon is 'RevivingSyringe'))
+				if (KeepWeaponWhileReviving())
 				{
-					if (player.ReadyWeapon is 'RevivingSyringe') player.PendingWeapon = WP_NOCHANGE;
-					else player.PendingWeapon = Weapon(player_pawn.FindInventory('RevivingSyringe', true));
+					RaisePlayerWeapon(PlayerNumber);
+				}
+				else
+				{
+					if (player.PendingWeapon != WP_NOCHANGE || !(player.PendingWeapon is 'RevivingSyringe'))
+					{
+						if (player.ReadyWeapon is 'RevivingSyringe') player.PendingWeapon = WP_NOCHANGE;
+						else player.PendingWeapon = Weapon(player_pawn.FindInventory('RevivingSyringe', true));
+					}
 				}
 			}
 			else
@@ -408,27 +509,33 @@ class SnowyMPGameplayChanges : EventHandler
 	void CheckFrozenPlayers()
 	{
 		for(int PlayerNumber = 0; PlayerNumber < MAXPLAYERS; PlayerNumber++) 
-			if (IsPlayerFrozen(PlayerNumber)) players[PlayerNumber].mo.Vel.XY *= 0.8;
+		{
+			if (IsPlayerFrozen(PlayerNumber))
+			{
+				if (CanMoveWhileReviving())
+					UnfreezePlayer(PlayerNumber);
+				else
+					players[PlayerNumber].mo.Vel.XY *= 0.8; 
+			}
+		}
 	}
 
 	void CheckGameOver()
 	{
-		if (ActivePlayerCount() <= 0 || LevelRestarting) return;
-
-		if (GetSnowyMPHandler().IsCooperativeGame())
+		if (ActivePlayerCount() < 1 || LevelRestarting) return;
+		
+		if (!InGameOver && LivingPlayerCount() < 1 && !CanRespawnHappenAfterGameOver())
 		{
-			if (!InGameOver && LivingPlayerCount() <= 0)
-			{
-				InGameOver = true;
-				SendNetworkEvent("SnowyMP_GameOver");
-			}
-			else if (InGameOver && LivingPlayerCount() > 0)
-			{
-				InGameOver = false;
-				SendNetworkEvent("SnowyMP_ResetGameOver");
-				RandomizeGameOverMusic();
-			}
+			InGameOver = true;
+			SendNetworkEvent("SnowyMP_GameOver");
 		}
+		else if (InGameOver && LivingPlayerCount() > 0)
+		{
+			InGameOver = false;
+			SendNetworkEvent("SnowyMP_ResetGameOver");
+			RandomizeGameOverMusic();
+		}
+		
 	}
 
 	void CheckLevelRestart()
@@ -459,7 +566,7 @@ class SnowyMPGameplayChanges : EventHandler
 
 		for(int PlayerNumber = 0; PlayerNumber < MAXPLAYERS; PlayerNumber++)
 		{
-			if (!respawn_allowed)
+			if (!respawn_allowed || !PlayerHasRespawnsLeft(PlayerNumber))
 			{
 				CancelPlayerRespawnDelay(PlayerNumber);
 				continue;
@@ -484,7 +591,7 @@ class SnowyMPGameplayChanges : EventHandler
 	void CheckReviving()
 	{
 		if (InGameOver) return;
-		bool reviving_allowed = CVar.GetCVar('snowy_mp__allow_reviving', players[consoleplayer]).GetBool();
+		bool reviving_allowed = IsRevivingAllowed();
 		for(int PlayerNumber = 0; PlayerNumber < MAXPLAYERS; PlayerNumber++)
 		{
 			if (!reviving_allowed)
@@ -497,7 +604,7 @@ class SnowyMPGameplayChanges : EventHandler
 
 			if (IsPlayerReviving(PlayerNumber))
 			{
-				if (GetPlayerRevivingTimer(PlayerNumber) < MP_Constants.ReviveTime) MP_Players[PlayerNumber].RevivingTimer++;
+				if (GetPlayerRevivingTimer(PlayerNumber) < ReviveTime()) MP_Players[PlayerNumber].RevivingTimer++;
 				else
 				{
 					SendNetworkEvent("SnowyMP_RevivePlayer", PlayerNumber, GetPlayerRevivingTarget(PlayerNumber));
@@ -509,9 +616,14 @@ class SnowyMPGameplayChanges : EventHandler
 	void CheckSpectating()
 	{
 		if (InGameOver) return;
-		bool spectating_allowed = CVar.GetCVar('snowy_mp__allow_death_spectating', players[consoleplayer]).GetBool();
+		bool spectating_allowed = IsSpectatingAllowed();
 		for(int PlayerNumber = 0; PlayerNumber < MAXPLAYERS; PlayerNumber++)
 		{
+			if (IsPlayerActive(PlayerNumber) && IsPlayerSpectating(PlayerNumber))
+				MP_Players[PlayerNumber].SpectateModeKeybindDisplayTics++;
+			else 
+				MP_Players[PlayerNumber].SpectateModeKeybindDisplayTics = 0;
+
 			if (!spectating_allowed)
 			{
 				PlayerStopSpectating(PlayerNumber);
@@ -580,10 +692,57 @@ class SnowyMPGameplayChanges : EventHandler
 		for(int PlayerNumber = 0; PlayerNumber < MAXPLAYERS; PlayerNumber++)
 		{
 			if (!IsPlayerActive(PlayerNumber)) continue;
-
-			if (!IsPlayerFalling(PlayerNumber) && !IsPlayerOnDamagingFloor(PlayerNumber))
+			
+			if (IsPlayerAlive(PlayerNumber) && !IsPlayerFalling(PlayerNumber) && IsPlayerInSafeSpot(PlayerNumber))
 			{
-				MP_Players[PlayerNumber].SafeSpot = players[PlayerNumber].mo.Pos;
+				MP_Players[PlayerNumber].SafeTics++;
+				if (MP_Players[PlayerNumber].SafeTics >= MP_Constants.ValidSafeSpotTics)
+				{
+					MP_Players[PlayerNumber].SafeSpot = players[PlayerNumber].mo.Pos;
+					MP_Players[PlayerNumber].SafeAngle = players[PlayerNumber].mo.Angle;
+					MP_Players[PlayerNumber].SafeTics = 0;
+				}
+			}
+			else
+			{
+				MP_Players[PlayerNumber].SafeTics = 0;
+			}
+
+			if (NeverIrrecoverableBodies() && !IsPlayerAlive(PlayerNumber) && !IsPlayerInSafeSpot(PlayerNumber))
+			{
+				WarpPlayerToSafeSpot(PlayerNumber);
+			}
+		}
+	}
+
+
+	void CheckBleedOut()
+	{
+		if (InGameOver) return;
+
+		bool bleed_out_allowed = IsBleedOutAllowed();
+		bool reviving_allowed = IsRevivingAllowed();
+
+		for(int PlayerNumber = 0; PlayerNumber < MAXPLAYERS; PlayerNumber++)
+		{
+			if (!bleed_out_allowed || !reviving_allowed)
+			{
+				MP_Players[PlayerNumber].BleedOutTics = 0;
+				continue;
+			}
+
+			if (!IsPlayerActive(PlayerNumber)) continue;
+
+			if (!IsPlayerAlive(PlayerNumber) && !IsPlayerBeingRevived(PlayerNumber))
+			{
+				MP_Players[PlayerNumber].BleedOutTics++;
+
+				if (HasPlayerJustBledOut(PlayerNumber))
+					PlayerBleedOut(PlayerNumber);
+			}
+			else
+			{
+				MP_Players[PlayerNumber].BleedOutTics = 0;
 			}
 		}
 	}
@@ -591,34 +750,32 @@ class SnowyMPGameplayChanges : EventHandler
 
 	override bool InputProcess(InputEvent e)
 	{
-		/*
-		if (!GetSnowyMPHandler().IsMultiplayerGame())
-			return false;
- 		*/
 		let binding = Bindings.GetBinding(e.KeyScan);
+		bool key_down = e.Type == InputEvent.Type_KeyDown;
+		bool key_up = e.Type == InputEvent.Type_KeyUp;
 
-		if (CVar.GetCVar('snowy_mp__allow_death_spectating', players[consoleplayer]).GetBool() && !IsPlayerAlive(consoleplayer))
+		if (IsSpectatingAllowed() && !IsPlayerAlive(consoleplayer))
 		{
 			if (binding ~== "changeSpectatingMode")
 			{
-				if (e.Type == InputEvent.Type_KeyDown) SendNetworkEvent("SnowyMP_ChangeSpectatingMode");
+				if (key_down) SendNetworkEvent("SnowyMP_ChangeSpectatingMode");
 				return true;
 			}
 			if (binding ~== "spectatePreviousPlayer")
 			{
-				if (e.Type == InputEvent.Type_KeyDown) SendNetworkEvent("SnowyMP_SpectatePreviousPlayer");
+				if (key_down) SendNetworkEvent("SnowyMP_SpectatePreviousPlayer");
 				return true;
 			}
 			if (binding ~== "spectateNextPlayer")
 			{
-				if (e.Type == InputEvent.Type_KeyDown) SendNetworkEvent("SnowyMP_SpectateNextPlayer");
+				if (key_down) SendNetworkEvent("SnowyMP_SpectateNextPlayer");
 				return true;
 			}
 		}
 
 		if (binding ~== "+use")
 		{
-			if (InGameOver && e.Type == InputEvent.Type_KeyDown && binding ~== "+use")
+			if (InGameOver && key_down)
 			{
 				SendNetworkEvent("SnowyMP_ReadyToRestart");
 				return true;
@@ -626,16 +783,16 @@ class SnowyMPGameplayChanges : EventHandler
 
 			if (!IsPlayerAlive(consoleplayer))
 			{
-				if (IsPlayerAllowedToRespawn(consoleplayer) && e.Type == InputEvent.Type_KeyDown)
+				if (PlayerCanRespawn(consoleplayer) && key_down)
 				{
 					SendNetworkEvent("SnowyMP_RespawnPlayer");
 					return true;
 				}
 				
 				if (
-					e.Type == InputEvent.Type_KeyDown && 
-					!IsPlayerFalling(consoleplayer) && IsPlayerOnDamagingFloor(consoleplayer) && 
-					CVar.GetCVar('snowy_mp__allow_return_to_spawn_after_damaging_floor_death', players[consoleplayer]).GetBool()
+					key_down && 
+					OptionallyIrrecoverableBodies() && !IsPlayerRespawning(consoleplayer) && !PlayerHasRespawnsLeft(consoleplayer) && 
+					!IsPlayerFalling(consoleplayer) && !IsPlayerInSafeSpot(consoleplayer)
 				)
 				{
 					SendNetworkEvent("SnowyMP_TeleportPlayerToStart");
@@ -645,15 +802,15 @@ class SnowyMPGameplayChanges : EventHandler
 				return true;
 			}
 
-			if (CVar.GetCVar('snowy_mp__allow_reviving', players[consoleplayer]).GetBool())
+			if (IsRevivingAllowed())
 			{
-				if (CanReviveNearby(consoleplayer) && e.Type == InputEvent.Type_KeyDown)
+				if (CanReviveNearby(consoleplayer) && key_down)
 				{
 					SendNetworkEvent("SnowyMP_ReviveStart"); 
 					return true;
 				}
 
-				if (IsPlayerReviving(consoleplayer) && e.Type == InputEvent.Type_KeyUp)
+				if (IsPlayerReviving(consoleplayer) && key_up)
 				{
 					SendNetworkEvent("SnowyMP_ReviveStop");
 					return true;
@@ -715,22 +872,77 @@ class SnowyMPGameplayChanges : EventHandler
 		}
 		else if (e.Name ~== "SnowyMP_TeleportPlayerToStart")
 		{
-			TeleportToPlayerStart(e.Player);
+			WarpPlayerToSafeSpot(e.Player);
 		}
 	}
 
 	// Player Inputs
 
-	void TeleportToPlayerStart(int PlayerNumber)
+	void WarpPlayerToSpawnPoint(int PlayerNumber)
 	{
 		if (!IsPlayerActive(PlayerNumber)) return;
 
 		PlayerInfo player = players[PlayerNumber];
 		if (!player || !player.mo) return;
 
-		player.mo.SetOrigin(MP_Players[PlayerNumber].SafeSpot, true);
+		player.mo.Teleport(MP_Players[PlayerNumber].SpawnPoint, MP_Players[PlayerNumber].SpawnAngle, TF_TELEFRAG);
+	}
 
-		Console.PrintF("ass");
+	void WarpPlayerToSafeSpot(int PlayerNumber)
+	{
+		if (!IsPlayerActive(PlayerNumber)) return;
+
+		PlayerInfo player = players[PlayerNumber];
+		if (!player || !player.mo) return;
+		
+		vector3 current_pos = player.mo.Pos;
+		player.mo.SetOrigin(MP_Players[PlayerNumber].SafeSpot, true);
+		
+		if (!IsPlayerInSafeSpot(PlayerNumber))
+			WarpPlayerToSpawnPoint(PlayerNumber);
+		else
+			player.mo.Teleport(MP_Players[PlayerNumber].SafeSpot, MP_Players[PlayerNumber].SafeAngle, TF_TELEFRAG);
+		
+		
+		if (AllowWarpingMessages()) Console.Printf("%s has warped to a safe spot", players[PlayerNumber].GetUserName());
+	}
+
+	/* Drop Items On Death */
+
+	void DropPlayerItemsOnDeath(int PlayerNumber)
+	{
+		if (!DropItemsOnDeath()) return;
+
+		if (DropWeaponsOnDeath())
+		{
+			PlayerDropAllOfItemType(PlayerNumber, 'Weapon');
+		}
+
+		if (DropAmmoOnDeath())
+		{
+			PlayerDropAllOfItemType(PlayerNumber, 'Ammo');
+		}
+
+		if (DropKeyItemsOnDeath())
+		{
+			PlayerDropAllOfItemType(PlayerNumber, 'Key');
+		}
+	}
+
+	void PlayerDropAllOfItemType(int PlayerNumber, class<Inventory> ItemType)
+	{
+		PlayerInfo player = players[PlayerNumber];
+		if (!player || !player.mo) return;
+		PlayerPawn player_pawn = player.mo;
+
+		ThinkerIterator item_iterator = ThinkerIterator.Create(ItemType, Thinker.STAT_INVENTORY);
+		Inventory item;
+		while (item = Inventory(item_iterator.Next()))
+		{
+			if (item.owner != player_pawn) continue;
+			let dropped_item = player_pawn.DropInventory(item);
+			if (dropped_item) dropped_item.TossItem();
+		}
 	}
 
 	/* Spectating */
@@ -739,6 +951,7 @@ class SnowyMPGameplayChanges : EventHandler
 	{
 		if (!IsPlayerActive(PlayerNumber) || IsPlayerAlive(PlayerNumber)) return;
 		MP_Players[PlayerNumber].SpectatingMode = (MP_Players[PlayerNumber].SpectatingMode + 1) % 2;
+		MP_Players[PlayerNumber].SpectateModeKeybindDisplayTics = MP_Constants.SpectateModeKeybindDisplayMaxTics;
 	}
 
 	void PlayerSpectateNextPlayer(int PlayerNumber)
@@ -784,6 +997,7 @@ class SnowyMPGameplayChanges : EventHandler
 		if (!MP_Players[PlayerNumber].SpectatingCamera) MP_Players[PlayerNumber].SpectatingCamera = Actor.Spawn('SpectatingCamera');
 		
 		if (PlayerNumber != consoleplayer) return;
+		if (!AllowSpectatingMessages()) return;
 
 		if (OtherPlayerNumber == PlayerNumber) 
 		{
@@ -796,9 +1010,79 @@ class SnowyMPGameplayChanges : EventHandler
 			break;case 3: pronoun = "itself";
 			}
 
-			Console.Printf("%s is now spectating %s", players[PlayerNumber].GetUserName(), pronoun);
+			Console.Printf("%s is now spectating %s.", players[PlayerNumber].GetUserName(), pronoun);
 		}
-		else Console.Printf("%s is now spectating %s", players[PlayerNumber].GetUserName(), players[OtherPlayerNumber].GetUserName());
+		else if (players[PlayerNumber].GetUserName() == players[OtherPlayerNumber].GetUserName())
+		{
+			Console.Printf("%s is now spectating the other %s.", players[PlayerNumber].GetUserName(), players[OtherPlayerNumber].GetUserName());
+		} 
+		else
+		{
+			Console.Printf("%s is now spectating %s.", players[PlayerNumber].GetUserName(), players[OtherPlayerNumber].GetUserName());
+		}
+	}
+
+	/* Respawning */
+
+	clearscope bool PlayerCanRespawn(int PlayerNumber)
+	{
+		if (!IsPlayerAllowedToRespawn(PlayerNumber))
+			return false; // Respawn timer is not finished
+		
+		if (!IsRespawningAllowed())
+			return false; // Respawns are not allowed
+		
+		if (IsPlayerAlive(PlayerNumber))
+			return false; // Player is alive
+		
+		if (!PlayerHasRespawnsLeft(PlayerNumber))
+			return false; // Player used too many respawns
+		
+		return true;
+	}
+
+	void CancelPlayerRespawnDelay(int PlayerNumber)
+	{
+		MP_Players[PlayerNumber].RespawnDelayTimer = -1;
+	}
+
+	void RespawnPlayer(int PlayerNumber)
+	{
+		if (IsPlayerAlive(PlayerNumber)) return;
+		
+		PlayerInfo player = players[PlayerNumber];
+		if (!player || !player.mo) return;
+		PlayerPawn player_pawn = player.mo;
+
+		PlayerStopSpectating(PlayerNumber);
+		CancelPlayerRespawnDelay(PlayerNumber);
+
+		if (RespawnInPlace())
+		{
+			if (!AlwaysIrrecoverableBodies() && !IsPlayerInSafeSpot(PlayerNumber)) 
+				WarpPlayerToSafeSpot(PlayerNumber);
+		}
+		else
+		{
+			WarpPlayerToSpawnPoint(PlayerNumber);
+		}
+		
+		MP_Players[PlayerNumber].RespawnCount++;
+		player.Resurrect();
+		player_pawn.A_SetHealth(RespawnedHealth());
+		
+		let reviving_player = GetPlayerRevivingThisPlayer(PlayerNumber);
+		if (reviving_player != -1) 
+		{
+			MP_Players[reviving_player].RevivingTarget = -1;
+			MP_Players[reviving_player].RevivingTimer = 0;
+			
+			UnfreezePlayer(reviving_player);
+			RaisePlayerWeapon(reviving_player);
+			PlayerStopSpectating(reviving_player);
+		}
+		
+		if (AllowRespawningMessages()) Console.PrintfEx(PRINT_LOW, "%s has respawned.", player.GetUserName());
 	}
 
 	/* Reviving */
@@ -824,49 +1108,26 @@ class SnowyMPGameplayChanges : EventHandler
 
 		downed_player.Resurrect();
 		downed_player.mo.A_Pain();
-		downed_player.mo.A_SetHealth(MP_Constants.RevivedHealth);
+		downed_player.mo.A_SetHealth(RevivedHealth());
 		
 		MP_Players[RevivingPlayerNumber].RevivingTarget = -1;
 		MP_Players[RevivingPlayerNumber].RevivingTimer = 0;
 		
+		MP_Players[DownedPlayerNumber].ReviveCount++;
+
 		UnfreezePlayer(RevivingPlayerNumber);
 		RaisePlayerWeapon(RevivingPlayerNumber);
 		PlayerStopSpectating(DownedPlayerNumber);
 
-		Console.PrintfEx(PRINT_MEDIUM, "%s has revived %s.", reviving_player.GetUserName(), downed_player.GetUserName());
-	}
+		if (!AllowRevivingMessages()) return;
 
-	void CancelPlayerRespawnDelay(int PlayerNumber)
-	{
-		MP_Players[PlayerNumber].RespawnDelayTimer = -1;
-	}
-
-	void RespawnPlayer(int PlayerNumber)
-	{
-		if (IsPlayerAlive(PlayerNumber)) return;
-		
-		PlayerInfo player = players[PlayerNumber];
-		if (!player || !player.mo) return;
-		PlayerPawn player_pawn = player.mo;
-
-		PlayerStopSpectating(PlayerNumber);
-		CancelPlayerRespawnDelay(PlayerNumber);
-
-		Console.PrintfEx(PRINT_LOW, "%s has respawned.", player.GetUserName());
-
-		player.Resurrect();
-		player_pawn.A_Pain();
-		player_pawn.A_SetHealth(MP_Constants.RevivedHealth);
-
-		let reviving_player = GetPlayerRevivingThisPlayer(PlayerNumber);
-		if (reviving_player != -1) 
+		if (reviving_player.GetUserName() == downed_player.GetUserName())
 		{
-			MP_Players[reviving_player].RevivingTarget = -1;
-			MP_Players[reviving_player].RevivingTimer = 0;
-			
-			UnfreezePlayer(reviving_player);
-			RaisePlayerWeapon(reviving_player);
-			PlayerStopSpectating(reviving_player);
+			Console.PrintfEx(PRINT_MEDIUM, "%s has revived the other %s.", reviving_player.GetUserName(), downed_player.GetUserName());
+		} 
+		else
+		{
+			Console.PrintfEx(PRINT_MEDIUM, "%s has revived %s.", reviving_player.GetUserName(), downed_player.GetUserName());
 		}
 	}
 
@@ -879,23 +1140,51 @@ class SnowyMPGameplayChanges : EventHandler
 
 		for (int OtherPlayerNumber = 0; OtherPlayerNumber < MAXPLAYERS; OtherPlayerNumber++)
 		{
-			if (PlayerNumber == OtherPlayerNumber) continue;
-			if (!IsPlayerActive(OtherPlayerNumber) || IsPlayerAlive(OtherPlayerNumber)) continue;
-
-			PlayerInfo other_player = players[OtherPlayerNumber];
-			if (!other_player || !other_player.mo) continue;
-
-			//if (!GetSnowyMPHandler().IsCooperativeGame() && !player.mo.IsTeammate(other_player.mo)) continue;
-			if (!player.mo.IsTeammate(other_player.mo)) continue;
-
-			double distance_to = Level.Vec3Diff(player.mo.Pos, other_player.mo.Pos).Length();
-			if (distance_to > MP_Constants.RevivingDistance) continue; // Too far away
-
-			return OtherPlayerNumber;
+			if (IsPlayerRevivableBy(PlayerNumber, OtherPlayerNumber))
+				return OtherPlayerNumber;
 		}
 
 		return -1;
 	}
+
+	clearscope bool IsPlayerRevivableBy(int PlayerNumber, int OtherPlayerNumber) const
+	{
+		if (!IsRevivingAllowed())
+			return false; // Revives are not allowed
+
+		if (!IsPlayerActive(PlayerNumber) || !IsPlayerActive(OtherPlayerNumber))
+			return false; // One of the players is not in the game
+
+		PlayerInfo player = players[PlayerNumber];
+		if (!player || !player.mo) 
+			return false; // Player doesn't exist (probably)
+
+		if (PlayerNumber == OtherPlayerNumber) 
+			return false; // Can't revive self
+		
+		if (IsPlayerAlive(OtherPlayerNumber)) 
+			return false; // The other player is alive duh
+
+		PlayerInfo other_player = players[OtherPlayerNumber];
+		if (!other_player || !other_player.mo) 
+			return false; // Other player doesn't exist (probably)
+
+		if (!player.mo.IsTeammate(other_player.mo))
+			return false; // Not a teammate
+
+		double distance_to = Level.Vec3Diff(player.mo.Pos, other_player.mo.Pos).Length();
+		if (distance_to > RevivingDistance()) 
+			return false; // Too far away
+
+		if (IsBleedOutAllowed() && HasPlayerBledOut(OtherPlayerNumber))
+			return false; // Other player has bled out already
+		
+		if (!InfiniteRevives() && GetPlayerReviveCount(OtherPlayerNumber) >= MaxReviveCount())
+			return false; // Other player has no more revives
+
+		return true;
+	}
+
 	
 	clearscope bool CanReviveNearby(int PlayerNumber) const
 	{
@@ -913,14 +1202,24 @@ class SnowyMPGameplayChanges : EventHandler
 		PlayerInfo reviving_player = players[RevivingPlayerNumber];
 		PlayerInfo downed_player = players[DownedPlayerNumber];
 
-		Console.PrintfEx(PRINT_MEDIUM, "%s is reviving %s.", reviving_player.GetUserName(), downed_player.GetUserName());
-
 		MP_Players[RevivingPlayerNumber].RevivingTarget = DownedPlayerNumber;
 		MP_Players[RevivingPlayerNumber].RevivingTimer = 0;
 
-		FreezePlayer(RevivingPlayerNumber);
-		LowerPlayerWeapon(RevivingPlayerNumber);
+		if (!CanMoveWhileReviving()) FreezePlayer(RevivingPlayerNumber);
+		if (!KeepWeaponWhileReviving()) LowerPlayerWeapon(RevivingPlayerNumber);
+
 		PlayerStopSpectating(DownedPlayerNumber);
+
+		if (!AllowRevivingMessages()) return;
+		
+		if (downed_player.GetUserName() == reviving_player.GetUserName())
+		{
+			Console.PrintfEx(PRINT_MEDIUM, "%s is reviving the other %s.", reviving_player.GetUserName(), downed_player.GetUserName());
+		} 
+		else
+		{
+			Console.PrintfEx(PRINT_MEDIUM, "%s is reviving %s.", reviving_player.GetUserName(), downed_player.GetUserName());
+		}
 	}
 
 	void PlayerStopReviving(int PlayerNumber)
@@ -930,17 +1229,47 @@ class SnowyMPGameplayChanges : EventHandler
 		PlayerInfo player = Players[PlayerNumber];
 		if (!player || !player.mo) return;
 
-		PlayerInfo downed_player = players[GetPlayerRevivingTarget(PlayerNumber)];
-
-		if (downed_player) Console.PrintfEx(PRINT_MEDIUM, "%s doesn't finish reviving %s.", player.GetUserName(), downed_player.GetUserName());
-		else Console.PrintfEx(PRINT_MEDIUM, "%s doesn't finish reviving.", player.GetUserName()); 
-
 		MP_Players[PlayerNumber].RevivingTarget = -1;
 		MP_Players[PlayerNumber].RevivingTimer = 0;
-
+		
 		UnfreezePlayer(PlayerNumber);
 		RaisePlayerWeapon(PlayerNumber);
+
+		if (!AllowRevivingMessages()) return;
+
+		PlayerInfo downed_player = players[GetPlayerRevivingTarget(PlayerNumber)];
+
+		if (downed_player)
+		{
+			if (downed_player.GetUserName() == player.GetUserName())
+			{
+				Console.PrintfEx(PRINT_MEDIUM, "%s doesn't finish reviving the other %s.", player.GetUserName(), downed_player.GetUserName());
+			} 
+			else
+			{
+				Console.PrintfEx(PRINT_MEDIUM, "%s doesn't finish reviving %s.", player.GetUserName(), downed_player.GetUserName());
+			}
+		}
+		else Console.PrintfEx(PRINT_MEDIUM, "%s doesn't finish reviving.", player.GetUserName()); 
 	}
+
+	/* Bleeding Out */
+
+	void PlayerBleedOut(int PlayerNumber)
+	{
+		if (IsPlayerAlive(PlayerNumber)) return;
+		if (!IsBleedOutAllowed()) return;
+
+		PlayerInfo player = Players[PlayerNumber];
+		if (!player || !player.mo) return;
+
+		MP_Players[PlayerNumber].BleedOutCount++;
+
+		if (AllowBleedOutMessages()) Console.PrintfEx(PRINT_MEDIUM, "%s has bled out.", player.GetUserName()); 
+	}
+
+
+	/* Game Overs */
 
 	void DoGameOver(int PlayerNumber)
 	{
@@ -1031,12 +1360,12 @@ class SnowyMPGameplayChanges : EventHandler
 		else
 		{
 			// Render reviving text
-			if (CVar.GetCVar('snowy_mp__allow_reviving', players[consoleplayer]).GetBool())
+			if (IsRevivingAllowed())
 			{
 				if (IsPlayerReviving(consoleplayer))
 				{
 					double CurrentReviveTime = MP_Players[consoleplayer].RevivingTimer;
-					double MaxReviveTime = MP_Constants.ReviveTime;
+					double MaxReviveTime = ReviveTime();
 
 					double countdown_timer = double(MaxReviveTime - CurrentReviveTime) / double(TICRATE);
 
@@ -1068,7 +1397,7 @@ class SnowyMPGameplayChanges : EventHandler
 				else if (IsPlayerBeingRevived(consoleplayer))
 				{
 					double CurrentReviveTime = MP_Players[GetPlayerRevivingThisPlayer(consoleplayer)].RevivingTimer;
-					double MaxReviveTime = MP_Constants.ReviveTime;
+					double MaxReviveTime = ReviveTime();
 
 					double countdown_timer = double(MaxReviveTime - CurrentReviveTime) / double(TICRATE);
 
@@ -1114,22 +1443,55 @@ class SnowyMPGameplayChanges : EventHandler
 			//Render respawning text
 			if (IsPlayerRespawning(consoleplayer))
 			{
-				int respawn_delay = GetPlayerRespawnTimer(consoleplayer);
-				if (respawn_delay > 0)
+				if (PlayerHasRespawnsLeft(consoleplayer))
 				{
+					
+
+					int respawn_delay = GetPlayerRespawnTimer(consoleplayer);
+					if (respawn_delay > 0)
+					{
+						StatusBar.DrawString(
+							small_hud_font, 
+							String.Format("You can respawn in %i seconds", int(double(respawn_delay) / TICRATE)), 
+							(0, y_offset_center), 
+							StatusBar.DI_SCREEN_CENTER | StatusBar.DI_TEXT_ALIGN_CENTER,
+							translation: Font.FindFontColor("Yellow")
+						);
+					}
+					else
+					{
+						StatusBar.DrawString(
+							small_hud_font, 
+							String.Format("Press %s to respawn.", use_keybind), 
+							(0, y_offset_center), 
+							StatusBar.DI_SCREEN_CENTER | StatusBar.DI_TEXT_ALIGN_CENTER,
+							translation: Font.FindFontColor("Yellow")
+						);
+					}
+					
+					y_offset_center += small_hud_font.mFont.GetHeight();
+
+					String respawns_left_string = "";
+					if (!InfiniteRespawns()) 
+					{
+						int respawns_left =  MaxRespawnCount() - GetPlayerRespawnCount(consoleplayer);
+						if (respawns_left == 1) respawns_left_string = " (1 respawn left)";
+						else respawns_left_string = String.Format(" (%i respawns left)", respawns_left);
+					}
+
 					StatusBar.DrawString(
 						small_hud_font, 
-						String.Format("You can respawn in %i seconds.", int(double(respawn_delay) / TICRATE)), 
+						respawns_left_string, 
 						(0, y_offset_center), 
 						StatusBar.DI_SCREEN_CENTER | StatusBar.DI_TEXT_ALIGN_CENTER,
-						translation: Font.FindFontColor("Red")
+						translation: Font.FindFontColor("Dark Red")
 					);
 				}
 				else
 				{
 					StatusBar.DrawString(
 						small_hud_font, 
-						String.Format("Press %s to respawn.", use_keybind), 
+						"No respawns left.", 
 						(0, y_offset_center), 
 						StatusBar.DI_SCREEN_CENTER | StatusBar.DI_TEXT_ALIGN_CENTER,
 						translation: Font.FindFontColor("Red")
@@ -1140,18 +1502,73 @@ class SnowyMPGameplayChanges : EventHandler
 			}
 			else if (!IsPlayerAlive(consoleplayer) && !IsPlayerSpectating(consoleplayer))
 			{
+				// Display "You are dead."
+
 				StatusBar.DrawString(
 					small_hud_font, 
-					String.Format("You are dead.", use_keybind), 
+					"You are dead.", 
 					(0, y_offset_center), 
 					StatusBar.DI_SCREEN_CENTER | StatusBar.DI_TEXT_ALIGN_CENTER,
 					translation: Font.FindFontColor("Red")
 				);
+
 				y_offset_center += small_hud_font.mFont.GetHeight();
+
+				if (IsRevivingAllowed() && ActivePlayerCount() > 1)
+				{	
+					// Display revives left
+					String revives_left_string = "";
+					if (!InfiniteRevives()) 
+					{
+						int revives_left = MaxReviveCount() - GetPlayerReviveCount(consoleplayer);
+						if (revives_left == 1) revives_left_string = "(1 revive left)";
+						else revives_left_string = String.Format("(%i revives left)", revives_left);
+					}
+
+					StatusBar.DrawString(
+						small_hud_font, 
+						revives_left_string, 
+						(0, y_offset_center), 
+						StatusBar.DI_SCREEN_CENTER | StatusBar.DI_TEXT_ALIGN_CENTER,
+						translation: Font.FindFontColor("Dark Red")
+					);
+
+					y_offset_center += small_hud_font.mFont.GetHeight();
+
+					// Display bleeding out text
+					if (IsBleedOutAllowed() && !HasPlayerBledOut(consoleplayer))
+					{
+						StatusBar.DrawString(
+							small_hud_font, 
+							String.Format("Bleeding out...", use_keybind), 
+							(0, y_offset_center), 
+							StatusBar.DI_SCREEN_CENTER | StatusBar.DI_TEXT_ALIGN_CENTER,
+							translation: Font.FindFontColor("Red")
+						);
+						y_offset_center += small_hud_font.mFont.GetHeight();
+					}
+				}
+				
+			}
+
+			// Show warp to safe spot text
+			if (
+				OptionallyIrrecoverableBodies() && !IsPlayerRespawning(consoleplayer) && !PlayerHasRespawnsLeft(consoleplayer) &&
+				!IsPlayerAlive(consoleplayer) && !IsPlayerFalling(consoleplayer) && !IsPlayerInSafeSpot(consoleplayer)
+			)
+			{
+				StatusBar.DrawString(
+					small_hud_font, 
+					String.Format("Press %s to warp to safe spot.", use_keybind), 
+					(0, y_offset_center), 
+					StatusBar.DI_SCREEN_CENTER | StatusBar.DI_TEXT_ALIGN_CENTER,
+					translation: Font.FindFontColor("Yellow")
+				);
+				y_offset_center += small_hud_font.mFont.GetHeight() * 2;
 			}
 
 			//Render spectating text
-			if (CVar.GetCVar('snowy_mp__allow_death_spectating', players[consoleplayer]).GetBool())
+			if (IsSpectatingAllowed() && LivingPlayerCount() > 1)
 			{
 				if (IsPlayerSpectating(consoleplayer))
 				{
@@ -1165,6 +1582,19 @@ class SnowyMPGameplayChanges : EventHandler
 						StatusBar.DI_SCREEN_CENTER | StatusBar.DI_TEXT_ALIGN_CENTER,
 						translation: Font.FindFontColor("White")
 					);
+					
+					if (MP_Players[consoleplayer].SpectateModeKeybindDisplayTics < MP_Constants.SpectateModeKeybindDisplayMaxTics)
+					{
+						y_offset_center += small_hud_font.mFont.GetHeight();
+
+						StatusBar.DrawString(
+							small_hud_font, 
+							String.Format("Press %s to change spectating mode.", spectate_mode_keybind), 
+							(0, y_offset_center), 
+							StatusBar.DI_SCREEN_CENTER | StatusBar.DI_TEXT_ALIGN_CENTER,
+							translation: Font.FindFontColor("Dark Gray")
+						);
+					}
 
 					y_offset_center += small_hud_font.mFont.GetHeight() * 2;
 				}
@@ -1172,7 +1602,7 @@ class SnowyMPGameplayChanges : EventHandler
 				{
 					StatusBar.DrawString(
 						small_hud_font, 
-						String.Format("Press \"%s\" or \"%s\" to spectate others.", spectate_next_keybind, spectate_prev_keybind), 
+						String.Format("Press %s or %s to spectate others.", spectate_next_keybind, spectate_prev_keybind), 
 						(0, y_offset_center), 
 						StatusBar.DI_SCREEN_CENTER | StatusBar.DI_TEXT_ALIGN_CENTER,
 						translation: Font.FindFontColor("White")
