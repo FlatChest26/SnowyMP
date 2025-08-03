@@ -1,0 +1,47 @@
+AddOptionMenu "OptionsMenu"
+{
+	Submenu "Snowy MP Options", "SnowyMultiplayerOptions"
+}
+
+AddOptionMenu "OptionsMenuSimple"
+{
+	Submenu "Snowy MP", "SnowyMultiplayerOptions"
+}
+
+
+OptionValue RespawnDelayValues
+{
+	-1, "No respawns (Permadeath)"
+	0, "Instant"
+	5, "5 seconds"
+	10, "10 seconds"
+	15, "15 seconds"
+	20, "20 seconds"
+	30, "30 seconds"
+	60, "60 seconds"
+}
+
+OptionMenu "SnowyMultiplayerOptions"
+{
+	Title "Snowy Multiplayer"
+
+	StaticText "HUD Options"
+    Option "Group Info HUD", "snowy_mp__display_group_info_ui", YesNo
+    Option "Display Player Names", "snowy_mp__display_player_names", YesNo
+	StaticText ""
+
+	StaticText "Gameplay Settings"
+    Option "Respawn Delay", "snowy_mp__delay_before_respawn", RespawnDelayValues
+    Option "Allow Player Revives", "snowy_mp__allow_reviving", YesNo
+    Option "Allow Spectating After Death", "snowy_mp__allow_death_spectating", YesNo
+    Option "Allow Returning To Spawn", "snowy_mp__allow_return_to_spawn_after_damaging_floor_death", YesNo
+	StaticText ""
+	Option "Allow Dropping Items On Death", "snowy_mp__drop_items_on_death", YesNo
+	Option "Drop Weapons On Death", "snowy_mp__death_drop_all", YesNo
+	Option "Drop Ammo On Death", "snowy_mp__death_drop_ammo", YesNo
+	Option "Drop Key Items On Death", "snowy_mp__death_drop_keys", YesNo
+	StaticText ""
+
+	StaticText "Silly Stuff"
+	Option "COD Zombies Game Over Songs", "snowy_mp__cod_zombies_game_overs", YesNo
+}

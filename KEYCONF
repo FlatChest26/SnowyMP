@@ -1,0 +1,10 @@
+AddKeySection "Snowy Multiplayer" "SnowyMP"
+
+AddMenuKey "Change Spectating Mode" changeSpectatingMode
+defaultbind P changeSpectatingMode
+
+AddMenuKey "Spectate Previous Player" spectatePreviousPlayer
+defaultbind [ spectatePreviousPlayer
+
+AddMenuKey "Spectate Next Player" spectateNextPlayer
+defaultbind ] spectateNextPlayer

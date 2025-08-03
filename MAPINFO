@@ -1,0 +1,7 @@
+GameInfo
+{
+    AddEventHandlers = "SnowyMPHandler"
+
+    AddEventHandlers = "SnowyMPGroupUIHandler"
+    AddEventHandlers = "SnowyMPGameplayChanges"
+}

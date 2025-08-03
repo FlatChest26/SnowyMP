@@ -1,0 +1,19 @@
+// Multiplayer Settings //
+
+// Server
+server int snowy_mp__delay_before_respawn = -1;
+server bool snowy_mp__allow_reviving = true;
+server bool snowy_mp__allow_death_spectating = true;
+server bool snowy_mp__allow_return_to_spawn_after_damaging_floor_death = true;
+
+server bool snowy_mp__drop_items_on_death = true;
+server bool snowy_mp__death_drop_weapons = false;
+server bool snowy_mp__death_drop_ammo = true;
+server bool snowy_mp__death_drop_keys = false;
+
+
+// User
+user bool snowy_mp__cod_zombies_game_overs = true;
+
+user bool snowy_mp__display_player_names = false;
+user bool snowy_mp__display_group_info_ui = true;
