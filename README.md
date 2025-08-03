@@ -15,4 +15,12 @@ Snowy MP is a mod I created to make experiencing new WAD's with my friends more 
 
 The mod's mechanics only work when in a network game, so you must distribute the pk3 to other players and add it as a command-line parameter before hosting or joining!!!
 
-When a game starts, do be sure to go to the SnowyMP options menu and make sure everything is to your liking. Some settings are tied to GZDoom's compatability rules and will be reset starting a new game. 
+Example:
+
+```
+gzdoom mods/SnowyMP.pk3 -iwad doom2.wad -host 1 -warp 01
+```
+
+When a game starts, do be sure to go to the SnowyMP options menu and make sure everything is to your liking. 
+
+Some settings are tied to GZDoom's compatability rules and will be reset after starting a new game. 
