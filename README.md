@@ -11,4 +11,8 @@ Features:
 
 Snowy MP is a mod I created to make experiencing new WAD's with my friends more enjoyable. The mechanics are somewhat inspired by Call of Duty Zombies and The Outlast Trials.
 
-The mod's mechanics only work when in a network game!!!
+## How to use
+
+The mod's mechanics only work when in a network game, so you must distribute the pk3 to other players and add it as a command-line parameter before hosting or joining!!!
+
+When a game starts, do be sure to go to the SnowyMP options menu and make sure everything is to your liking. Some settings are tied to GZDoom's compatability rules and will be reset starting a new game. 
