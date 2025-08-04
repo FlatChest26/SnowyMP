@@ -71,7 +71,7 @@ class SnowyMPGameplayChanges : EventHandler
 
 	void RandomizeGameOverMusic()
 	{
-		switch(Random(0, 7))
+		switch(Random(0, 8))
 		{
 		break; case 0: GameOverMusic = "Ascension - Game Over";
 		break; case 1: GameOverMusic = "Der Riese - Game Over";
@@ -81,6 +81,7 @@ class SnowyMPGameplayChanges : EventHandler
 		break; case 5: GameOverMusic = "Kino Der Toten - Game Over";
 		break; case 6: GameOverMusic = "Shangri La - Game Over";
 		break; case 7: GameOverMusic = "Die Rise - Game Over"; 
+		break; case 8: GameOverMusic = "Moon - Game Over"; 
 		}
 	}
 
@@ -117,7 +118,7 @@ class SnowyMPGameplayChanges : EventHandler
 	clearscope int RespawnedHealth() const { return CVar.GetCVar('snowy_mp__respawned_health', players[consoleplayer]).GetInt(); }
 
 	clearscope int RevivedHealth() const { return CVar.GetCVar('snowy_mp__revived_health', players[consoleplayer]).GetInt(); }
-	clearscope int ReviveTime() const { return CVar.GetCVar('snowy_mp__revive_delay', players[consoleplayer]).GetInt(); }
+	clearscope int ReviveTime() const { return CVar.GetCVar('snowy_mp__revive_delay', players[consoleplayer]).GetInt() * TICRATE; }
 	clearscope int RevivingDistance() const { return CVar.GetCVar('snowy_mp__reviving_distance', players[consoleplayer]).GetInt(); }
 
 	clearscope bool AllowMessages() const { return CVar.GetCVar('snowy_mp__allow_messages', players[consoleplayer]).GetBool(); }
@@ -327,6 +328,12 @@ class SnowyMPGameplayChanges : EventHandler
 
 		if (player.mo.CurSector.floordata)
 			return true;
+		
+		let [ceiling_height, ceiling_sec] = player.mo.CurSector.HighestCeilingAt(player.mo.Pos.XY);
+		let [floor_height, floor_sec] = player.mo.CurSector.LowestFloorAt(player.mo.Pos.XY);
+
+		if (ceiling_height - floor_height <= player.mo.Height)
+			return true;
 
 		return false;
 	}
@@ -375,7 +382,7 @@ class SnowyMPGameplayChanges : EventHandler
 		}
 		
 		MP_Constants.LevelRestartTime = 2 * TICRATE;
-		MP_Constants.ValidSafeSpotTics = 2 * TICRATE;
+		MP_Constants.ValidSafeSpotTics = 1 * TICRATE;
 		MP_Constants.SpectateModeKeybindDisplayMaxTics = 4 * TICRATE;
 	}
 
@@ -1426,17 +1433,43 @@ class SnowyMPGameplayChanges : EventHandler
 
 					y_offset_center += small_hud_font.mFont.GetHeight() * 2;
 				}
-				else if (CanReviveNearby(consoleplayer))
+				else
 				{
-					StatusBar.DrawString(
-						small_hud_font, 
-						String.Format("Press %s to revive.", use_keybind), 
-						(0, y_offset_center), 
-						StatusBar.DI_SCREEN_CENTER | StatusBar.DI_TEXT_ALIGN_CENTER,
-						translation: Font.FindFontColor("Red")
-					);
+					let downed_player = FindNearbyDownedPlayer(consoleplayer);
 
-					y_offset_center += small_hud_font.mFont.GetHeight() * 2;
+					if (downed_player != -1)
+					{
+						StatusBar.DrawString(
+							small_hud_font, 
+							String.Format("Press %s to revive %s.", use_keybind, players[downed_player].GetUserName()), 
+							(0, y_offset_center), 
+							StatusBar.DI_SCREEN_CENTER | StatusBar.DI_TEXT_ALIGN_CENTER,
+							translation: Font.FindFontColor("Red")
+						);
+
+						y_offset_center += small_hud_font.mFont.GetHeight();
+
+						// Display revives left
+						if (!InfiniteRevives()) 
+						{
+							String revives_left_string = "";
+							int revives_left = MaxReviveCount() - GetPlayerReviveCount(downed_player);
+							if (revives_left == 1) revives_left_string = "(1 revive left)";
+							else revives_left_string = String.Format("(%i revives left)", revives_left);
+
+							StatusBar.DrawString(
+								small_hud_font, 
+								revives_left_string, 
+								(0, y_offset_center), 
+								StatusBar.DI_SCREEN_CENTER | StatusBar.DI_TEXT_ALIGN_CENTER,
+								translation: Font.FindFontColor("Dark Red")
+							);
+
+							y_offset_center += small_hud_font.mFont.GetHeight();
+						}
+
+						y_offset_center += small_hud_font.mFont.GetHeight();
+					}
 				}
 			}
 
@@ -1445,8 +1478,6 @@ class SnowyMPGameplayChanges : EventHandler
 			{
 				if (PlayerHasRespawnsLeft(consoleplayer))
 				{
-					
-
 					int respawn_delay = GetPlayerRespawnTimer(consoleplayer);
 					if (respawn_delay > 0)
 					{
@@ -1469,23 +1500,22 @@ class SnowyMPGameplayChanges : EventHandler
 						);
 					}
 					
-					y_offset_center += small_hud_font.mFont.GetHeight();
-
-					String respawns_left_string = "";
 					if (!InfiniteRespawns()) 
 					{
+						String respawns_left_string = "";
+						y_offset_center += small_hud_font.mFont.GetHeight();
+
 						int respawns_left =  MaxRespawnCount() - GetPlayerRespawnCount(consoleplayer);
 						if (respawns_left == 1) respawns_left_string = " (1 respawn left)";
 						else respawns_left_string = String.Format(" (%i respawns left)", respawns_left);
+							StatusBar.DrawString(
+							small_hud_font, 
+							respawns_left_string, 
+							(0, y_offset_center), 
+							StatusBar.DI_SCREEN_CENTER | StatusBar.DI_TEXT_ALIGN_CENTER,
+							translation: Font.FindFontColor("Dark Red")
+						);
 					}
-
-					StatusBar.DrawString(
-						small_hud_font, 
-						respawns_left_string, 
-						(0, y_offset_center), 
-						StatusBar.DI_SCREEN_CENTER | StatusBar.DI_TEXT_ALIGN_CENTER,
-						translation: Font.FindFontColor("Dark Red")
-					);
 				}
 				else
 				{
@@ -1517,23 +1547,23 @@ class SnowyMPGameplayChanges : EventHandler
 				if (IsRevivingAllowed() && ActivePlayerCount() > 1)
 				{	
 					// Display revives left
-					String revives_left_string = "";
 					if (!InfiniteRevives()) 
 					{
+						String revives_left_string = "";
 						int revives_left = MaxReviveCount() - GetPlayerReviveCount(consoleplayer);
 						if (revives_left == 1) revives_left_string = "(1 revive left)";
 						else revives_left_string = String.Format("(%i revives left)", revives_left);
+
+						StatusBar.DrawString(
+							small_hud_font, 
+							revives_left_string, 
+							(0, y_offset_center), 
+							StatusBar.DI_SCREEN_CENTER | StatusBar.DI_TEXT_ALIGN_CENTER,
+							translation: Font.FindFontColor("Dark Red")
+						);
+
+						y_offset_center += small_hud_font.mFont.GetHeight();
 					}
-
-					StatusBar.DrawString(
-						small_hud_font, 
-						revives_left_string, 
-						(0, y_offset_center), 
-						StatusBar.DI_SCREEN_CENTER | StatusBar.DI_TEXT_ALIGN_CENTER,
-						translation: Font.FindFontColor("Dark Red")
-					);
-
-					y_offset_center += small_hud_font.mFont.GetHeight();
 
 					// Display bleeding out text
 					if (IsBleedOutAllowed() && !HasPlayerBledOut(consoleplayer))
