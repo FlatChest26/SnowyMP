@@ -98,6 +98,7 @@ OptionMenu "SnowyMultiplayerOptions"
 	
 	StaticText "Item Drops On Death", 1
 	Option "Allow Dropping Items On Death", "snowy_mp__drop_items_on_death", YesNo
+	Option "Only Drop Items When Fully Dead", "snowy_mp__drop_items_on_full_death", YesNo, "snowy_mp__drop_items_on_death"
 	Option "Drop Items On Death After Game over", "snowy_mp__drop_items_during_game_over", YesNo, "snowy_mp__drop_items_on_death"
 	Option "Drop Weapons On Death", "snowy_mp__death_drop_all", YesNo, "snowy_mp__drop_items_on_death"
 	Option "Drop Ammo On Death", "snowy_mp__death_drop_ammo", YesNo, "snowy_mp__drop_items_on_death"

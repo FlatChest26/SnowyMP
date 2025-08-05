@@ -1,5 +1,7 @@
 class SnowyMPGroupUIHandler : EventHandler
 {
+	clearscope SnowyMPGameplayChanges GetSnowyMPGameplayChanges() const { return SnowyMPGameplayChanges(EventHandler.Find('SnowyMPGameplayChanges')); }
+
 	ui void DrawImageToBox(TextureID tex, int x, int y, int width, int height, double alpha = 0.75, bool animate = false)
 	{
 		if (!tex) return;
@@ -139,15 +141,19 @@ class SnowyMPGroupUIHandler : EventHandler
 	{
 		int starting_y = y;
 		string player_state_text = "";
-
+		
 		switch (CPlayer.PlayerState)
 		{
-		//break; case PST_LIVE: player_state_text = "Alive";
-		break; case PST_DEAD: player_state_text = " - \cgDOWN\c-";
-		//break; case PST_REBORN: player_state_text = "Reborn";
-		//break; case PST_ENTER: player_state_text = "Entered";
-		//break; case PST_GONE: player_state_text = "Disconnected";
+			//break; case PST_LIVE: player_state_text = "Alive";
+			break; case PST_DEAD: player_state_text = " - \cgDOWN\c-";
+			//break; case PST_REBORN: player_state_text = "Reborn";
+			//break; case PST_ENTER: player_state_text = "Entered";
+			//break; case PST_GONE: player_state_text = "Disconnected";
 		}
+		
+		let mp_gameplay = GetSnowyMPGameplayChanges();
+		if (mp_gameplay.IsPlayerFullyDead(CPlayer.mo.PlayerNumber()))
+			player_state_text = " - \cgDEAD\c-";
 
 		string title = String.Format("%s%s", CPlayer.GetUserName(), player_state_text);
 

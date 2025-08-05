@@ -14,6 +14,8 @@ server int snowy_mp__revived_health = 25;
 server int snowy_mp__reviving_distance = 48;
 
 server bool snowy_mp__drop_items_on_death = true;
+server bool snowy_mp__drop_items_on_full_death = true;
+
 server bool snowy_mp__drop_items_during_game_over = true;
 server bool snowy_mp__death_drop_weapons = false;
 server bool snowy_mp__death_drop_ammo = true;
@@ -27,8 +29,6 @@ server int snowy_mp__max_respawn_count = -1;
 
 server bool snowy_mp__allow_respawns_after_game_over = false;
 server bool snowy_mp__respawn_where_death_occured = true;
-
-
 
 server bool snowy_mp__allow_messages = true;
 server bool snowy_mp__revive_messages = true;

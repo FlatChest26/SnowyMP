@@ -1,31 +1,30 @@
 class SnowyMPNameTagHandler : EventHandler
 {
-	transient ui CVar NameTagsEnabled;
-
-	ui void CacheCVars()
-	{
-		if (!NameTagsEnabled) NameTagsEnabled = CVar.GetCVar("snowy_mp__display_player_names", players[consoleplayer]);
-		if (!NameTagsEnabled) ThrowAbortException("Cannot cache CVar \"snowy_mp__display_player_names\"!");
-	}
+	clearscope SnowyMPGameplayChanges GetSnowyMPGameplayChanges() const { return SnowyMPGameplayChanges(EventHandler.Find('SnowyMPGameplayChanges')); }
+	clearscope bool NameTagsEnabled() const { return CVar.GetCVar("snowy_mp__display_player_names", players[consoleplayer]).GetBool(); }
 
 	override void RenderOverlay(RenderEvent e)
 	{
-		// DrawNameTags(e);
+		DrawNameTags(e);
 	}
 
 	ui void DrawNameTags(RenderEvent e)
 	{
+		let mp_gameplay = GetSnowyMPGameplayChanges();
+		if (!mp_gameplay) return;
+
 		// Make sure the automap is inactive
 		if (automapactive) return;
 
 		// Check if name tags are enabled
-		CacheCVars();
-		if (!NameTagsEnabled.GetBool()) return;
+		if (!NameTagsEnabled()) return;
 
 		// Check for the console player
 		PlayerInfo player_info = players[consoleplayer];
 		if (!player_info || !player_info.mo) return;
 		PlayerPawn player = player_info.mo;
+
+		if (!mp_gameplay.IsPlayerAlive(consoleplayer)) return;
 
 		StatusBar.BeginHUD();
 		HUDFont hud_font = HUDFont.Create(smallfont);
@@ -59,25 +58,9 @@ class SnowyMPNameTagHandler : EventHandler
 		double distance_to = Level.Vec3Offset(player.Pos, entity.Pos).Length();
 		if (distance_to > MaxNameTagDistance) return;
 
-		vector2 screen_pos = (0.0, 0.0); 
+		vector2 screen_pos = (0.0, 0.01); 
 		vector2 scale = (1.0, 1.0); 
-
-		double x_dir = 1; 
-		double y_dir = 1;
-
-		if (abs(angle_between) > 0) x_dir = angle_between / abs(angle_between);
-		if (abs(pitch_between) > 0) y_dir = pitch_between / abs(pitch_between);
-
-		double tx = abs(angle_between) / angle_max;
-		double ty = abs(pitch_between) / pitch_max;
-		tx *= tx * tx;
-		ty *= ty;
-
-		screen_pos.x = SnowyMath.Lerp(0, 0.5, tx) * -x_dir;
-		screen_pos.y = SnowyMath.Lerp(0, 0.5, ty) * y_dir;
-
-		screen_pos.y -= 0.01;
-
+		
 		screen_pos.x *= Screen.GetWidth();
 		screen_pos.y *= Screen.GetHeight();
 
